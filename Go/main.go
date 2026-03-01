@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -88,6 +89,14 @@ func evaluate(rid int, pid string, residents map[int]*Resident, programs map[str
 			} else {
 				offer(worstRes, residents, programs, nil)
 			}
+		} else {
+			// rid is rejected outright — have them try their next choice
+			if wg != nil {
+				wg.Add(1)
+				go offer(rid, residents, programs, wg)
+			} else {
+				offer(rid, residents, programs, nil)
+			}
 		}
 	}
 }
@@ -123,7 +132,7 @@ func loadResidents(filename string) map[int]*Resident {
 		line := lines[i]
 		id, _ := strconv.Atoi(strings.TrimSpace(line[0]))
 
-		rawRol := strings.Split(line[3], " ")
+		rawRol := strings.Split(strings.Trim(line[3], "[]"), ",")
 		var rol []string
 		for _, s := range rawRol {
 			s = strings.TrimSpace(s)
@@ -160,7 +169,7 @@ func loadPrograms(filename string) map[string]*Program {
 		progID := strings.TrimSpace(line[0])
 		nPos, _ := strconv.Atoi(strings.TrimSpace(line[2]))
 		// split and clean up list
-		rawRol := strings.Split(line[3], " ")
+		rawRol := strings.Split(strings.Trim(line[3], "[]"), ",")
 		var rol []int
 		for _, s := range rawRol {
 			s = strings.TrimSpace(s)
@@ -181,6 +190,9 @@ func loadPrograms(filename string) map[string]*Program {
 }
 
 func main() {
+	concurrent := flag.Bool("concurrent", false, "run in concurrent mode")
+	flag.Parse()
+
 	// change file name to test different csv files
 	resFile := "residentSmall.csv"
 	progFile := "programSmall.csv"
@@ -194,13 +206,17 @@ func main() {
 
 	start := time.Now()
 	var wg sync.WaitGroup
-	// match each resident concurrently
 	for id := range residents {
-		wg.Add(1)
-		go offer(id, residents, programs, &wg)
+		if *concurrent {
+			wg.Add(1)
+			go offer(id, residents, programs, &wg)
+		} else {
+			offer(id, residents, programs, nil)
+		}
 	}
-
-	wg.Wait()
+	if *concurrent {
+		wg.Wait()
+	}
 	end := time.Now()
 
 	// print solution
