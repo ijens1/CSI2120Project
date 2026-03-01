@@ -1,6 +1,7 @@
 package main
 
 //Bo Lin Chen #300236550
+// Isaac Jensen-Large 300341826
 
 import (
 	"encoding/csv"
@@ -61,13 +62,13 @@ func evaluate(rid int, pid string, residents map[int]*Resident, programs map[str
 	}
 
 	prog.mu.Lock()
-	defer prog.mu.Unlock()
 	// adds if program has open spot
 	if len(prog.selectedResidents) < prog.nPositions {
 		prog.selectedResidents = append(prog.selectedResidents, rid)
 		residents[rid].matchedProgram = pid
+		prog.mu.Unlock()
 	} else {
-		// finding the worst resident avaliable
+		// finding the worst resident available
 		worstRes := prog.selectedResidents[0]
 		worstIndex := 0
 
@@ -78,11 +79,11 @@ func evaluate(rid int, pid string, residents map[int]*Resident, programs map[str
 			}
 		}
 		// checking if the new applicant is better than the worst one we just found
-		if prefers(prog, rid, worstRes) == true {
+		if prefers(prog, rid, worstRes) {
 			prog.selectedResidents[worstIndex] = rid
 			residents[rid].matchedProgram = pid
 			residents[worstRes].matchedProgram = ""
-
+			prog.mu.Unlock()
 			if wg != nil {
 				wg.Add(1)
 				go offer(worstRes, residents, programs, wg)
@@ -90,7 +91,7 @@ func evaluate(rid int, pid string, residents map[int]*Resident, programs map[str
 				offer(worstRes, residents, programs, nil)
 			}
 		} else {
-			// rid is rejected outright — have them try their next choice
+			prog.mu.Unlock()
 			if wg != nil {
 				wg.Add(1)
 				go offer(rid, residents, programs, wg)
@@ -194,8 +195,8 @@ func main() {
 	flag.Parse()
 
 	// change file name to test different csv files
-	resFile := "residentSmall.csv"
-	progFile := "programSmall.csv"
+	resFile := "residentsLarge.csv"
+	progFile := "programsLarge.csv"
 
 	residents := loadResidents(resFile)
 	programs := loadPrograms(progFile)
